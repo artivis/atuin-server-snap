@@ -1,0 +1,38 @@
+#!/bin/sh
+# postgres-daemon — runs as _daemon_ (not root); exec'd by wrapper-postgres.
+#
+# All needed env vars (PG_BIN, POSTGRES_DATA, POSTGRES_RUN,
+# POSTGRES_LOG, INIT_MARKER, POSTGRES_PORT, POSTGRES_PASSWORD, PGSHAREDIR,
+# LD_LIBRARY_PATH) are exported by wrapper-postgres before exec.
+set -e
+
+# ---------------------------------------------------------------------------
+# First-time initialisation
+# ---------------------------------------------------------------------------
+if [ ! -f "${INIT_MARKER}" ]; then
+    # shellcheck source=snap/local/postgres-initdb
+    . "${SNAP}/bin/postgres-initdb"
+fi
+
+# ---------------------------------------------------------------------------
+# Update pg_hba.conf and sync port on every start.
+# ---------------------------------------------------------------------------
+cat > "${POSTGRES_DATA}/pg_hba.conf" <<PGHBA
+# TYPE  DATABASE  USER      ADDRESS         METHOD
+# Unix socket (used internally)
+local   all       postgres                  trust
+local   atuin     atuin                     trust
+# TCP — used by atuin-server at runtime
+host    atuin     atuin     127.0.0.1/32    md5
+host    atuin     atuin     ::1/128         md5
+PGHBA
+
+# Sync the port in postgresql.conf in case it was changed via snap set.
+sed -i "s/^port = .*/port = ${POSTGRES_PORT}/" "${POSTGRES_DATA}/postgresql.conf"
+
+# ---------------------------------------------------------------------------
+# Run PostgreSQL in the foreground (snapd manages the process lifecycle).
+# ---------------------------------------------------------------------------
+exec "${PG_BIN}/postgres" \
+    -D "${POSTGRES_DATA}" \
+    -k "${POSTGRES_RUN}"

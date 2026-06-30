@@ -1,0 +1,53 @@
+#!/bin/sh
+# wrapper-server — start atuin-server.
+#
+# All atuin-server settings (host, port, db_uri, open_registration, …)
+# are read from $SNAP_COMMON/server.toml (written by the install hook).
+# Edit that file to configure the server.
+#
+# To use the bundled PostgreSQL:
+#   snap set atuin-server atuin-server.use-postgres=true
+# The configure hook starts the postgres service and restarts this server.
+# This wrapper then detects it is active and injects ATUIN_DB_URI.
+set -e
+
+# ---------------------------------------------------------------------------
+# Source postgres.conf for port and password
+# ---------------------------------------------------------------------------
+POSTGRES_PORT=5432
+# shellcheck source=/dev/null
+[ -f "${SNAP_COMMON}/postgres.conf" ] && . "${SNAP_COMMON}/postgres.conf"
+
+POSTGRES_PASSWORD=
+# shellcheck source=/dev/null
+[ -f "${SNAP_COMMON}/postgres.secret" ] && . "${SNAP_COMMON}/postgres.secret"
+
+# ---------------------------------------------------------------------------
+# If the bundled postgres service is active, inject db_uri and wait for it
+# to be fully ready.  Otherwise fall through and let server.toml supply it.
+# ---------------------------------------------------------------------------
+PG_ISREADY="${SNAP}/usr/lib/postgresql/18/bin/pg_isready"
+
+if snapctl services atuin-server.postgres | grep -q ' active'; then
+    export ATUIN_DB_URI="postgres://atuin:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/atuin"
+
+    TIMEOUT=60
+    ELAPSED=0
+    while ! "${PG_ISREADY}" -h localhost -p "${POSTGRES_PORT}" -q 2>/dev/null; do
+        echo "Waiting for bundled PostgreSQL on localhost:${POSTGRES_PORT}…"
+        if [ "${ELAPSED}" -ge "${TIMEOUT}" ]; then
+            echo "ERROR: bundled PostgreSQL did not become ready within ${TIMEOUT}s." >&2
+            exit 1
+        fi
+        sleep 1
+        ELAPSED=$((ELAPSED + 1))
+    done
+    echo "PostgreSQL is ready."
+fi
+
+# ---------------------------------------------------------------------------
+# Point atuin-server at the snap config directory.
+# ---------------------------------------------------------------------------
+export ATUIN_CONFIG_DIR="${SNAP_COMMON}"
+
+exec "${SNAP}/bin/atuin-server" start

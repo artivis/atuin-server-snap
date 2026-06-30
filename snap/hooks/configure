@@ -1,0 +1,27 @@
+#!/bin/sh
+# configure hook — called on every `snap set`.
+#
+# Handles the atuin-server.use-postgres knob:
+#   snap set atuin-server atuin-server.use-postgres=true   → start bundled PG, restart server
+#   snap set atuin-server atuin-server.use-postgres=false  → stop bundled PG, restart server
+set -e
+
+use_pg="$(snapctl get atuin-server.use-postgres)"
+
+case "${use_pg}" in
+    true)
+        snapctl start --enable atuin-server.postgres
+        snapctl restart atuin-server.server
+        ;;
+    false)
+        snapctl stop --disable atuin-server.postgres 2>/dev/null || true
+        snapctl restart atuin-server.server 2>/dev/null || true
+        ;;
+    "")
+        # No atuin-server.use-postgres key set — nothing to do.
+        ;;
+    *)
+        echo "ERROR: atuin-server.use-postgres must be 'true' or 'false', got '${use_pg}'" >&2
+        exit 1
+        ;;
+esac

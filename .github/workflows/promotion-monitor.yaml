@@ -1,0 +1,19 @@
+name: Promotion monitor
+
+"on":
+  schedule:
+    # Every Monday at 09:00 UTC (after upstream-monitor runs at 08:00)
+    - cron: '0 9 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  monitor:
+    uses: canonical/robotics-actions-workflows/.github/workflows/channel-risk-sync-monitor.yaml@main
+    with:
+      snap-name: atuin-server
+      snap-track: latest
+      snap-risk-aspirant: candidate
+      snap-risk-target: stable
+      # Open an issue if candidate has been waiting more than 7 days for promotion.
+      threshold: 7
+    secrets: inherit
