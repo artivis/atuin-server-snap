@@ -1,0 +1,143 @@
+name: atuin-server
+base: core26
+adopt-info: atuin-server-bin
+title: Atuin Server
+summary: Self-hosted sync server for Atuin shell history
+license: MIT
+contact: https://github.com/atuinsh/atuin/issues
+issues: https://github.com/atuinsh/atuin/issues
+source-code: https://github.com/atuinsh/atuin
+website: https://atuin.sh
+description: |
+  Self-hosted sync server for Atuin, enabling encrypted shell history
+  synchronisation across multiple machines.
+
+  All server settings are configured via server.toml, written to
+  /var/snap/atuin-server/common/server.toml with documented defaults on
+  first install. Edit that file, then start the server.
+
+  QUICK START — SQLite (simplest, single-machine):
+
+    sudo snap install atuin-server
+    # The server starts automatically using the default SQLite db.
+    # Edit /var/snap/atuin-server/common/server.toml to customise.
+
+  QUICK START — bundled PostgreSQL 18 (multi-user / team):
+
+    sudo snap install atuin-server
+    sudo snap set atuin-server atuin-server.use-postgres=true
+    # Starts bundled postgres, restarts the server, injects the URI.
+
+  SNAP CONFIG:
+
+    atuin-server.use-postgres  true|false  Enable/disable bundled PostgreSQL
+
+  Bundled PostgreSQL port and password are set in:
+    /var/snap/atuin-server/common/postgres.conf
+
+  NOTE: external PostgreSQL must be reachable via TCP (localhost or a
+  hostname). Unix-socket connections are blocked by snap confinement.
+
+grade: stable
+confinement: strict
+
+# _daemon_ system username requires snapd >= 2.61
+assumes:
+  - snapd2.61
+
+# PostgreSQL (initdb + postgres) refuses to run as root as a deliberate security
+# hardening measure.
+# Snap daemons start as root by default, so we declare _daemon_ here
+# and use `setpriv` in wrapper-postgres to drop privileges before exec-ing any
+# postgres binary.
+system-usernames:
+  _daemon_: shared
+
+platforms:
+  amd64:
+  arm64:
+
+# Bind the PostgreSQL standard paths into the snap namespace so the
+# postgres binary can locate its hardcoded share/lib directories.
+layout:
+  /usr/lib/postgresql/18:
+    bind: $SNAP/usr/lib/postgresql/18
+  /usr/share/postgresql/18:
+    bind: $SNAP/usr/share/postgresql/18
+
+apps:
+  server:
+    command: bin/wrapper-server
+    daemon: simple
+    restart-condition: on-failure
+    after: [postgres]
+    plugs:
+      - network
+      - network-bind
+
+  postgres:
+    command: bin/wrapper-postgres
+    daemon: simple
+    restart-condition: on-failure
+    install-mode: disable
+    environment:
+      PGSHAREDIR: $SNAP/usr/share/postgresql/18
+      LD_LIBRARY_PATH: $SNAP/usr/lib/postgresql/18/lib:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
+    plugs:
+      - network
+      - network-bind
+
+  get-db-password:
+    command: bin/get-db-password
+
+parts:
+  # ---------------------------------------------------------------
+  # atuin-server binary: build from source using the Rust toolchain.
+  # Only the server binary is compiled; the client and other crates
+  # in the workspace are excluded.
+  # ---------------------------------------------------------------
+  atuin-server-bin:
+    plugin: rust
+    source: https://github.com/atuinsh/atuin
+    source-type: git
+    source-tag: v18.16.1
+    source-depth: 1
+    rust-channel: stable
+    rust-path:
+      - crates/atuin-server
+    override-pull: |
+      craftctl default
+      tag="$(git describe --tags --exact-match 2>/dev/null | sed 's/^v//')"
+      craftctl set version="${tag:-$(git rev-parse --short HEAD)}"
+    build-packages:
+      - gcc
+      - libc6-dev
+      - libssl-dev
+      - pkg-config
+    stage-packages:
+      - libssl3
+
+  # ---------------------------------------------------------------
+  # PostgreSQL 18 — bundled so the snap can run its own database
+  # without any host-side PostgreSQL installation.
+  # ---------------------------------------------------------------
+  postgresql:
+    plugin: nil
+    stage-packages:
+      - postgresql-18
+      - postgresql-client-18
+      - libssl3
+      - libpam0g
+
+  # ---------------------------------------------------------------
+  # Wrapper scripts for the two daemons.
+  # ---------------------------------------------------------------
+  wrappers:
+    plugin: dump
+    source: snap/local/
+    organize:
+      wrapper-server: bin/wrapper-server
+      wrapper-postgres: bin/wrapper-postgres
+      postgres-initdb: bin/postgres-initdb
+      postgres-daemon: bin/postgres-daemon
+      get-db-password: bin/get-db-password

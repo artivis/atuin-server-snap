@@ -1,0 +1,23 @@
+name: Promote
+
+"on":
+  workflow_dispatch:
+    inputs:
+      from-channel:
+        description: 'Source channel risk'
+        required: false
+        default: 'latest/candidate'
+      to-channel:
+        description: 'Destination channel risk'
+        required: false
+        default: 'latest/stable'
+
+jobs:
+  promote:
+    uses: canonical/robotics-actions-workflows/.github/workflows/promote.yaml@main
+    with:
+      snap: atuin-server
+      from-channel: ${{ inputs.from-channel }}
+      to-channel: ${{ inputs.to-channel }}
+    secrets:
+      snapstore-login: ${{ secrets.SNAPSTORE_LOGIN }}

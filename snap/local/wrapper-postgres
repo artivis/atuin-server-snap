@@ -1,0 +1,44 @@
+#!/bin/sh
+# wrapper-postgres — initialise and run the bundled PostgreSQL 18 server.
+#
+# On first start:
+#   1. initdb creates a fresh database cluster in $SNAP_DATA/postgres/data
+#   2. A temporary postgres instance runs to create the atuin role and database
+#   3. A marker file prevents re-initialisation on subsequent starts
+#
+# Configure port and password in $SNAP_COMMON/postgres.conf.
+set -e
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+export PG_BIN="${SNAP}/usr/lib/postgresql/18/bin"
+
+POSTGRES_DIR="${SNAP_DATA}/postgres"
+export POSTGRES_DATA="${POSTGRES_DIR}/data"
+export POSTGRES_RUN="${POSTGRES_DIR}/run"
+export POSTGRES_LOG="${POSTGRES_DIR}/postgres.log"
+export INIT_MARKER="${POSTGRES_DIR}/.initialized"
+
+mkdir -p "${POSTGRES_DATA}" "${POSTGRES_RUN}"
+# Hand ownership to _daemon_ — initdb and postgres must not run as root.
+chown _daemon_:root "${POSTGRES_DIR}" "${POSTGRES_DATA}" "${POSTGRES_RUN}"
+
+# ---------------------------------------------------------------------------
+# Source postgres.conf
+# ---------------------------------------------------------------------------
+POSTGRES_PORT=5432
+# shellcheck source=/dev/null
+[ -f "${SNAP_COMMON}/postgres.conf" ] && . "${SNAP_COMMON}/postgres.conf"
+
+POSTGRES_PASSWORD=
+# shellcheck source=/dev/null
+[ -f "${SNAP_COMMON}/postgres.secret" ] && . "${SNAP_COMMON}/postgres.secret"
+export POSTGRES_PORT POSTGRES_PASSWORD
+
+# ---------------------------------------------------------------------------
+# Drop privileges to _daemon_ and hand off to postgres-daemon.
+# initdb and postgres itself must not run as root.
+# ---------------------------------------------------------------------------
+exec setpriv --clear-groups --reuid _daemon_ --regid _daemon_ -- \
+    /bin/sh "${SNAP}/bin/postgres-daemon"

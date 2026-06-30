@@ -1,0 +1,14 @@
+name: Upstream monitor
+
+"on":
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: '0 8 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  monitor:
+    uses: canonical/robotics-actions-workflows/.github/workflows/upstream-gh-tag-monitor.yaml@main
+    with:
+      source-repo: atuinsh/atuin
+    secrets: inherit

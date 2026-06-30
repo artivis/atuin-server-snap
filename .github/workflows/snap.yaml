@@ -1,0 +1,40 @@
+name: snap
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install just
+        run: sudo snap install just --classic
+
+      - name: Install lint tools
+        run: just lint-setup
+
+      - name: Lint
+        run: just lint
+
+  snap:
+    name: Snap
+    needs: [lint]
+    uses: canonical/robotics-actions-workflows/.github/workflows/snap.yaml@main
+    with:
+      snap-test-script: |
+        # The server daemon auto-starts; wait up to 30 s for it to come up.
+        i=0
+        until curl -sf http://localhost:8888/ || [ "$i" -ge 30 ]; do
+          i=$((i + 1))
+          sleep 1
+        done
+        curl -sf http://localhost:8888/
+    secrets:
+      snapstore-login: ${{ secrets.SNAPSTORE_LOGIN }}

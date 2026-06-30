@@ -1,0 +1,74 @@
+#!/bin/sh
+# postgres-initdb — first-time initialisation of the bundled PostgreSQL cluster.
+#
+# Called by wrapper-postgres when the cluster has not yet been initialised.
+# Expects the following variables to already be set by the caller:
+#   PG_BIN, POSTGRES_DATA, POSTGRES_RUN, POSTGRES_LOG,
+#   POSTGRES_PORT, POSTGRES_PASSWORD, INIT_MARKER
+set -e
+
+echo "Initialising PostgreSQL cluster in ${POSTGRES_DATA} …"
+mkdir -p "${POSTGRES_DATA}"
+
+# Create the database cluster (no locale to avoid host dependency)
+"${PG_BIN}/initdb" \
+    -D "${POSTGRES_DATA}" \
+    --no-locale \
+    --encoding=UTF8 \
+    --username=postgres
+
+# Tune the cluster: listen only on localhost, use the snap-private
+# Unix socket directory, and set the requested TCP port.
+cat >> "${POSTGRES_DATA}/postgresql.conf" <<PGCONF
+
+# atuin-server snap overrides
+listen_addresses = 'localhost'
+unix_socket_directories = '${POSTGRES_RUN}'
+port = ${POSTGRES_PORT}
+PGCONF
+
+# Restrict access: only the atuin role may connect to the atuin DB,
+# either via Unix socket (trust) or localhost TCP (md5).
+cat > "${POSTGRES_DATA}/pg_hba.conf" <<PGHBA
+# TYPE  DATABASE  USER      ADDRESS         METHOD
+# Unix socket — used during initialisation below
+local   all       postgres                  trust
+local   atuin     atuin                     trust
+# TCP — used by atuin-server at runtime
+host    atuin     atuin     127.0.0.1/32    md5
+host    atuin     atuin     ::1/128         md5
+PGHBA
+
+# Start a temporary postgres to create the role and database.
+"${PG_BIN}/pg_ctl" \
+    -D "${POSTGRES_DATA}" \
+    -o "-k ${POSTGRES_RUN}" \
+    -l "${POSTGRES_LOG}" \
+    start
+
+# Wait for it to accept connections.
+for _ in $(seq 1 30); do
+    "${PG_BIN}/pg_isready" -h localhost -p "${POSTGRES_PORT}" -q && break
+    sleep 1
+done
+
+# Create the atuin role and database.
+"${PG_BIN}/psql" \
+    -h "${POSTGRES_RUN}" \
+    -U postgres \
+    -c "CREATE ROLE atuin WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';"
+
+"${PG_BIN}/createdb" \
+    -h "${POSTGRES_RUN}" \
+    -U postgres \
+    -O atuin \
+    atuin
+
+# Stop the temporary instance cleanly.
+"${PG_BIN}/pg_ctl" \
+    -D "${POSTGRES_DATA}" \
+    -o "-k ${POSTGRES_RUN}" \
+    stop
+
+touch "${INIT_MARKER}"
+echo "PostgreSQL initialisation complete."

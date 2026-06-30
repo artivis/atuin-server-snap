@@ -1,0 +1,91 @@
+#!/bin/sh
+# install hook — runs once on first install.
+#
+# atuin-server.use-postgres controls the bundled postgres service.
+# All atuin-server settings live in $SNAP_COMMON/server.toml, which the
+# wrapper points at via ATUIN_CONFIG_DIR.  Edit that file directly to
+# configure the server.
+#
+set -e
+
+# Initialise snap config defaults.
+snapctl set atuin-server.use-postgres=false
+
+# ---------------------------------------------------------------------------
+# postgres.conf — bundled PostgreSQL settings (non-secret)
+# ---------------------------------------------------------------------------
+PG_CONF="${SNAP_COMMON}/postgres.conf"
+
+if [ ! -f "${PG_CONF}" ]; then
+    cat > "${PG_CONF}" <<'EOF'
+## Bundled PostgreSQL configuration for atuin-server snap.
+## Edit this file to change the PostgreSQL port.
+## Changes take effect on the next start of the postgres service.
+
+## TCP port PostgreSQL listens on
+POSTGRES_PORT=5432
+EOF
+fi
+
+# ---------------------------------------------------------------------------
+# postgres.secret — generated password for the bundled atuin role
+# Mode 600: readable only by root (the snap daemon user).
+# Never shown in snap config or postgres.conf.
+# ---------------------------------------------------------------------------
+PG_SECRET="${SNAP_COMMON}/postgres.secret"
+
+if [ ! -f "${PG_SECRET}" ]; then
+    # Generate 32 random URL-safe bytes as a hex string
+    password="$(openssl rand -hex 32)"
+    printf 'POSTGRES_PASSWORD=%s\n' "${password}" > "${PG_SECRET}"
+    chmod 600 "${PG_SECRET}"
+fi
+
+# ---------------------------------------------------------------------------
+# server.toml — full atuin-server configuration, upstream defaults
+# ---------------------------------------------------------------------------
+CONF="${SNAP_COMMON}/server.toml"
+
+# Only write if it doesn't already exist (re-install without --purge
+# preserves $SNAP_COMMON, so we don't overwrite operator customisations).
+if [ ! -f "${CONF}" ]; then
+    cat > "${CONF}" <<'TOML'
+## atuin-server configuration
+## Location: /var/snap/atuin-server/common/server.toml
+## Upstream reference: https://github.com/atuinsh/atuin/blob/main/crates/atuin-server/server.toml
+
+## Address and port the HTTP server listens on
+host = "0.0.0.0"
+port = 8888
+
+## Allow anyone to register a new account
+open_registration = false
+
+## Database URI — required. Examples:
+##   postgres://user:password@localhost/atuin  (TCP only, no Unix socket)
+##   sqlite:///var/snap/atuin-server/common/atuin.db
+## SQLite is the simplest option for personal or single-machine use.
+## Use PostgreSQL for multi-user or team deployments.
+db_uri = "sqlite:///var/snap/atuin-server/common/atuin.db"
+# db_uri = "postgres://user:password@localhost/atuin"
+
+## Maximum length (bytes) of a single history entry
+max_history_length = 8192
+
+## Maximum size (bytes) of a single record (default: 1 GiB)
+max_record_size = 1073741824
+
+## Default page size for paginated responses
+page_size = 1100
+
+## Enable legacy sync v1 routes (history-based sync).
+## Set to false to use only the newer record-based sync.
+sync_v1_enabled = false
+
+[metrics]
+## Expose a Prometheus /metrics endpoint on a separate port
+enable = false
+host = "127.0.0.1"
+port = 9001
+TOML
+fi
