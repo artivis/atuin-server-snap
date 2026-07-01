@@ -1,25 +1,9 @@
-name: Bump version
+name: Monitor update tickets
 
-"on":
-  # Triggered automatically by the upstream-monitor workflow via workflow_dispatch,
-  # or manually to bump to a specific version.
-  workflow_dispatch:
-    inputs:
-      new-version:
-        description: 'New upstream tag (e.g. v18.17.0). Leave blank to pick up the latest monitoring issue.'
-        required: false
-        default: ''
-      issue-to-close:
-        description: 'Issue number opened by the upstream monitor (required when new-version is set).'
-        required: false
-        default: ''
+on:
+  schedule:
+    - cron: '0 9 * * *'
 
 jobs:
-  bump:
+  monitor-update-tickets:
     uses: canonical/robotics-actions-workflows/.github/workflows/bump-snap-version.yaml@main
-    with:
-      new-version: ${{ inputs.new-version }}
-      issue-to-close: ${{ inputs.issue-to-close }}
-      # adopt-info references atuin-server-bin, so that part's source-tag is updated.
-      source-tag-part: atuin-server-bin
-    secrets: inherit

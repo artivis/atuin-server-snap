@@ -3,7 +3,7 @@ name: Promotion monitor
 "on":
   schedule:
     # Every Monday at 09:00 UTC (after upstream-monitor runs at 08:00)
-    - cron: '0 9 * * 1'
+    - cron: '0 9 * * *'
   workflow_dispatch: {}
 
 jobs:

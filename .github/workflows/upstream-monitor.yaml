@@ -3,7 +3,7 @@ name: Upstream monitor
 "on":
   schedule:
     # Every Monday at 08:00 UTC
-    - cron: '0 8 * * 1'
+    - cron: '0 8 * * *'
   workflow_dispatch: {}
 
 jobs:
