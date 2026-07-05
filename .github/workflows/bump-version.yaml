@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 9 * * *'
 
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
 jobs:
   monitor-update-tickets:
     uses: canonical/robotics-actions-workflows/.github/workflows/bump-snap-version.yaml@main

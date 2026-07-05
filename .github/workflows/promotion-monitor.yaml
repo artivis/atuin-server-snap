@@ -8,6 +8,8 @@ name: Promotion monitor
 
 jobs:
   monitor:
+    permissions:
+      issues: write
     uses: canonical/robotics-actions-workflows/.github/workflows/channel-risk-sync-monitor.yaml@main
     with:
       snap-name: atuin-server
