@@ -37,14 +37,11 @@ description: |
 
   NOTE: external PostgreSQL must be reachable via TCP (localhost or a
   hostname). Unix-socket connections are blocked by snap confinement.
-
 grade: stable
 confinement: strict
-
 # _daemon_ system username requires snapd >= 2.61
 assumes:
   - snapd2.61
-
 # PostgreSQL (initdb + postgres) refuses to run as root as a deliberate security
 # hardening measure.
 # Snap daemons start as root by default, so we declare _daemon_ here
@@ -52,11 +49,9 @@ assumes:
 # postgres binary.
 system-usernames:
   _daemon_: shared
-
 platforms:
   amd64:
   arm64:
-
 # Bind the PostgreSQL standard paths into the snap namespace so the
 # postgres binary can locate its hardcoded share/lib directories.
 layout:
@@ -64,7 +59,6 @@ layout:
     bind: $SNAP/usr/lib/postgresql/18
   /usr/share/postgresql/18:
     bind: $SNAP/usr/share/postgresql/18
-
 apps:
   server:
     command: bin/wrapper-server
@@ -74,7 +68,6 @@ apps:
     plugs:
       - network
       - network-bind
-
   postgres:
     command: bin/wrapper-postgres
     daemon: simple
@@ -86,10 +79,8 @@ apps:
     plugs:
       - network
       - network-bind
-
   get-db-password:
     command: bin/get-db-password
-
 parts:
   # ---------------------------------------------------------------
   # atuin-server binary: build from source using the Rust toolchain.
@@ -100,7 +91,7 @@ parts:
     plugin: rust
     source: https://github.com/atuinsh/atuin
     source-type: git
-    source-tag: v18.16.1
+    source-tag: v18.17.1
     source-depth: 1
     rust-channel: stable
     rust-path:
@@ -116,7 +107,6 @@ parts:
       - pkg-config
     stage-packages:
       - libssl3
-
   # ---------------------------------------------------------------
   # PostgreSQL 18 — bundled so the snap can run its own database
   # without any host-side PostgreSQL installation.
@@ -128,7 +118,6 @@ parts:
       - postgresql-client-18
       - libssl3
       - libpam0g
-
   # ---------------------------------------------------------------
   # Wrapper scripts for the two daemons.
   # ---------------------------------------------------------------
