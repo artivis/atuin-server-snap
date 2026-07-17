@@ -9,6 +9,7 @@ name: Promotion monitor
 jobs:
   monitor:
     permissions:
+      contents: read
       issues: write
     uses: canonical/robotics-actions-workflows/.github/workflows/channel-risk-sync-monitor.yaml@main
     with:

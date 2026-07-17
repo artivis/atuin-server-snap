@@ -40,3 +40,6 @@ jobs:
         curl -sf http://localhost:8888/
     secrets:
       snapstore-login: ${{ secrets.SNAPSTORE_LOGIN }}
+    permissions:
+      contents: read
+      actions: write
